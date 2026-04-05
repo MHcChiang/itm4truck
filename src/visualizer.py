@@ -1,4 +1,7 @@
+import io
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend — safe for Colab and headless envs
 import matplotlib.pyplot as plt
 import rasterio
 
@@ -48,12 +51,25 @@ def plot_signal_distribution(dem_path: str, tx_coords: tuple, lon_grid: np.ndarr
     plt.title('Integrated Signal & Terrain Coverage (700MHz)', fontsize=14, fontweight='bold')
     plt.xlabel('Longitude')
     plt.ylabel('Latitude')
-    plt.axis('equal')
-    
+    # set_aspect with 'datalim' adjusts the data range instead of fighting xlim/ylim
+    plt.gca().set_aspect('equal', adjustable='datalim')
+
     if target_area:
         plt.xlim(target_area["west"], target_area["east"])
         plt.ylim(target_area["south"], target_area["north"])
-        
+
     plt.legend(loc='upper right')
     plt.tight_layout()
-    plt.show()
+
+    # Display inline (Colab/Jupyter) or save to file (headless)
+    try:
+        from IPython.display import display, Image as IPImage
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+        buf.seek(0)
+        display(IPImage(buf.read()))
+    except ImportError:
+        plt.savefig('signal_coverage.png', dpi=150, bbox_inches='tight')
+        print("Plot saved to signal_coverage.png")
+    finally:
+        plt.close()
