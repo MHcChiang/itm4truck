@@ -1,0 +1,17 @@
+# Base Python and original workflow
+py3dep
+rioxarray
+matplotlib
+
+# Geospatial & Core computation
+numpy
+shapely
+fiona
+rasterio
+pyproj
+rasterstats
+
+# Utilities & Testing
+tqdm
+simplejson
+pytest>=4.6

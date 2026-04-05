@@ -1,0 +1,21 @@
+name: Truck
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - py3dep
+  - rioxarray
+  - matplotlib
+  - numpy
+  - tqdm
+  - simplejson
+  - pytest>=4.6
+
+  # Geospatial & Core computation (Combined from itmlogic requirements)
+  - numpy
+  - shapely
+  - fiona
+  - rasterio
+  - pyproj
+  - rasterstats
