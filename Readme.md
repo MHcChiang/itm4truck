@@ -11,8 +11,8 @@ This project relies on strict system-level geospatial C++ dependencies. **Do not
 
 ### 1. **Clone the repository and its submodule:**
    ```bash
-   git clone <YOUR_REPO_URL>
-   cd itm_signal_estimation
+   git clone https://github.com/MHcChiang/itm4truck.git
+   cd itm4truck
    ```
 
 ### 2. Install `itmlogic`
