@@ -302,3 +302,219 @@ def estimate_grid_signal(
             rssi_matrix[i, j] = rssi
 
     return lon_grid, lat_grid, rssi_matrix
+
+
+def build_hex_grid(target_area: dict, resolution: int = 9) -> list:
+    """
+    Build a list of hexagonal cell IDs covering the specified target area.
+
+    Args:
+        target_area: Dictionary with keys 'west', 'south', 'east', 'north'.
+        resolution: H3 resolution level. 9=0.1km^2
+
+    Returns:
+        A list of H3 cell string IDs.
+    """
+    import h3
+
+    exterior = [
+        (float(target_area["north"]), float(target_area["west"])),
+        (float(target_area["north"]), float(target_area["east"])),
+        (float(target_area["south"]), float(target_area["east"])),
+        (float(target_area["south"]), float(target_area["west"])),
+        (float(target_area["north"]), float(target_area["west"])),
+    ]
+
+    try:
+        # h3 v4.x
+        polygon = h3.LatLngPoly(exterior)
+        cells = h3.polygon_to_cells(polygon, resolution)
+    except AttributeError:
+        # h3 v3.x fallback
+        geojson = {
+            "type": "Polygon",
+            "coordinates": [[[lng, lat] for lat, lng in exterior]],
+        }
+        cells = h3.polyfill(geojson, resolution, geo_json_conformant=True)
+    
+    return list(cells)
+
+
+def convert_dem_to_hex(dem_array: np.ndarray, inv_transform, hex_cells: list) -> dict:
+    """
+    Convert square DEM to hex DEM by sampling elevation at each hex cell center.
+
+    Args:
+        dem_array: DEM raster as numpy array.
+        inv_transform: Inverse raster affine transform.
+        hex_cells: List of H3 cell IDs.
+
+    Returns:
+        A dictionary mapping hex_id to elevation.
+    """
+    import h3
+
+    hex_dem = {}
+    for cell in hex_cells:
+        try:
+            lat, lon = h3.cell_to_latlng(cell)
+        except AttributeError:
+            lat, lon = h3.h3_to_geo(cell)
+
+        cols, rows = inv_transform * (lon, lat)
+        col = int(np.clip(np.round(cols), 0, dem_array.shape[1] - 1))
+        row = int(np.clip(np.round(rows), 0, dem_array.shape[0] - 1))
+
+        hex_dem[cell] = float(dem_array[row, col])
+
+    return hex_dem
+
+
+def calculate_hex_p2p_rssi(
+    tx_lon: float,
+    tx_lat: float,
+    rx_cell: str,
+    hex_dem: dict,
+    base_params: dict,
+    tx_power_dbm: float = 43.0,
+) -> float:
+    import h3
+
+    try:
+        lat, lon = h3.cell_to_latlng(rx_cell)
+    except AttributeError:
+        lat, lon = h3.h3_to_geo(rx_cell)
+
+    if abs(tx_lon - lon) < 1e-6 and abs(tx_lat - lat) < 1e-6:
+        return -30.0
+
+    _, _, distance_m = GEOD.inv(tx_lon, tx_lat, lon, lat)
+    distance_km = distance_m / 1000.0
+
+    try:
+        res = h3.get_resolution(rx_cell) if hasattr(h3, 'get_resolution') else h3.h3_get_resolution(rx_cell)
+        
+        try:
+            tx_cell = h3.latlng_to_cell(tx_lat, tx_lon, res)
+        except AttributeError:
+            tx_cell = h3.geo_to_h3(tx_lat, tx_lon, res)
+
+        try:
+            path_cells = h3.grid_path_cells(tx_cell, rx_cell)
+        except AttributeError:
+            path_cells = h3.h3_line(tx_cell, rx_cell)
+
+        surface_profile = [hex_dem.get(c, 0.0) for c in path_cells]
+
+        current_params = copy.deepcopy(base_params)
+        current_params["d"] = distance_km
+
+        results = itmlogic_p2p(current_params, surface_profile)
+        for result in results:
+            if (
+                result["reliability_level_%"] == 50
+                and result["confidence_level_%"] == 50
+            ):
+                return tx_power_dbm - result["propagation_loss_dB"]
+    except Exception:
+        return np.nan
+
+    return np.nan
+
+
+def process_hex_grid_point(args: tuple) -> tuple:
+    (
+        rx_cell,
+        tx_lon,
+        tx_lat,
+        hex_dem,
+        base_params,
+        tx_power_dbm,
+    ) = args
+
+    rssi = calculate_hex_p2p_rssi(
+        tx_lon, tx_lat, rx_cell, hex_dem, base_params, tx_power_dbm
+    )
+    return rx_cell, rssi
+
+
+def estimate_hex_grid_signal(
+    dem_path: str,
+    center_coords: tuple,
+    target_area: dict,
+    resolution: int,
+    base_params: dict,
+    tx_power_dbm: float = 43.0,
+) -> dict:
+    """
+    Estimate RSSI over an H3 hexagonal grid.
+
+    Args:
+        dem_path: Path to the DEM raster used for terrain sampling.
+        center_coords: Base station coordinates as (longitude, latitude).
+        target_area: Dictionary with keys 'west', 'south', 'east', 'north'.
+        resolution: H3 resolution level.
+        base_params: Base ITM parameter dictionary.
+        tx_power_dbm: Transmit power in dBm.
+
+    Returns:
+        A dictionary mapping H3 cell IDs to RSSI values.
+    """
+    import h3
+
+    tx_lon, tx_lat = center_coords
+
+    print(f"Building hex grid at resolution {resolution}...")
+    hex_cells = build_hex_grid(target_area, resolution)
+
+    with rasterio.open(dem_path) as src:
+        dem_array = src.read(1).astype(float)
+        inv_transform = ~src.transform
+        nodata = src.nodata
+
+    if nodata is not None:
+        dem_array[dem_array == nodata] = 0.0
+    dem_array[dem_array < -1000] = 0.0
+
+    print("Converting square DEM to hex DEM...")
+    hex_dem = convert_dem_to_hex(dem_array, inv_transform, hex_cells)
+
+    try:
+        tx_cell = h3.latlng_to_cell(tx_lat, tx_lon, resolution)
+    except AttributeError:
+        tx_cell = h3.geo_to_h3(tx_lat, tx_lon, resolution)
+
+    if tx_cell not in hex_dem:
+        cols, rows = inv_transform * (tx_lon, tx_lat)
+        col = int(np.clip(np.round(cols), 0, dem_array.shape[1] - 1))
+        row = int(np.clip(np.round(rows), 0, dem_array.shape[0] - 1))
+        hex_dem[tx_cell] = float(dem_array[row, col])
+
+    tasks = [
+        (
+            cell,
+            tx_lon,
+            tx_lat,
+            hex_dem,
+            base_params,
+            tx_power_dbm,
+        )
+        for cell in hex_cells
+    ]
+
+    hex_rssi = {}
+    print(f"Calculating ITM logic over {len(hex_cells)} hex cells...")
+    max_workers = os.cpu_count() * 2 if os.cpu_count() else 4
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(process_hex_grid_point, task): task for task in tasks
+        }
+        for future in tqdm(
+            concurrent.futures.as_completed(futures),
+            total=len(tasks),
+            desc="Calculating Hex RSSI",
+        ):
+            rx_cell, rssi = future.result()
+            hex_rssi[rx_cell] = rssi
+
+    return hex_rssi

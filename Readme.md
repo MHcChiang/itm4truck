@@ -2,7 +2,7 @@
 
 This repository encapsulates the Longley-Rice (ITM) model terrain and signal estimation workflow. It automates the following tasks with a given target area latitude and longitude:
 1. **DEM Downloading**
-2. **Grid-based Path Loss Generation**
+2. **Grid-based / H3 based Path Loss Generation**
 3. **GIS Overlay Mapping**
 
 ## Setup Instructions
@@ -28,13 +28,19 @@ git clone https://github.com/edwardoughton/itmlogic.git
 conda env create -f environment-itm.yml
 ```
 
-
+### 4. Install H3
+Follow the instruction on [H3](https://h3geo.org/docs/installation)
 
 ## Usage
 
-Run `main.py` to compute the estimated RSSI for the test region:
+Run `main.py` to compute the estimated RSSI for the test region using a standard square grid:
 ```bash
 python main.py
+```
+
+To run the estimation using an H3 hexagonal grid instead, use the `--h3` flag:
+```bash
+python main.py --h3
 ```
 
 The result should be like:
