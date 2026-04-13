@@ -22,14 +22,16 @@ We use [itmlogic](https://github.com/edwardoughton/itmlogic) to compute Longley-
 git clone https://github.com/edwardoughton/itmlogic.git
 ```
 
-### 3. Create Python Environment with Conda
-
+### 3. Create Python Environment 
+With Conda:
 ```bash
-conda env create -f environment-itm.yml
+conda env create -f environment.yml
+conda activate Truck
 ```
-
-### 4. Install H3
-Follow the instruction on [H3](https://h3geo.org/docs/installation)
+With pip: 
+```bash
+pip install -r requirements.txt
+```
 
 ## Usage
 

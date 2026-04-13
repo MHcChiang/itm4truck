@@ -19,3 +19,4 @@ dependencies:
   - rasterio
   - pyproj
   - rasterstats
+  - h3-py
