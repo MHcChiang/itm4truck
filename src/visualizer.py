@@ -109,10 +109,7 @@ def plot_hex_signal_map(dem_path: str, tx_coords: tuple, hex_rssi: dict, target_
     for cell, rssi in hex_rssi.items():
         if np.isnan(rssi):
             continue
-        try:
-            boundary = h3.cell_to_boundary(cell)
-        except AttributeError:
-            boundary = h3.h3_to_geo_boundary(cell)
+        boundary = h3.cell_to_boundary(cell)
         
         # h3 returns (lat, lng), we need (lng, lat) for matplotlib
         polygon = Polygon([(lng, lat) for lat, lng in boundary], closed=True)

@@ -325,17 +325,8 @@ def build_hex_grid(target_area: dict, resolution: int = 9) -> list:
         (float(target_area["north"]), float(target_area["west"])),
     ]
 
-    try:
-        # h3 v4.x
-        polygon = h3.LatLngPoly(exterior)
-        cells = h3.polygon_to_cells(polygon, resolution)
-    except AttributeError:
-        # h3 v3.x fallback
-        geojson = {
-            "type": "Polygon",
-            "coordinates": [[[lng, lat] for lat, lng in exterior]],
-        }
-        cells = h3.polyfill(geojson, resolution, geo_json_conformant=True)
+    polygon = h3.LatLngPoly(exterior)
+    cells = h3.polygon_to_cells(polygon, resolution)
     
     return list(cells)
 
@@ -356,10 +347,7 @@ def convert_dem_to_hex(dem_array: np.ndarray, inv_transform, hex_cells: list) ->
 
     hex_dem = {}
     for cell in hex_cells:
-        try:
-            lat, lon = h3.cell_to_latlng(cell)
-        except AttributeError:
-            lat, lon = h3.h3_to_geo(cell)
+        lat, lon = h3.cell_to_latlng(cell)
 
         cols, rows = inv_transform * (lon, lat)
         col = int(np.clip(np.round(cols), 0, dem_array.shape[1] - 1))
@@ -380,10 +368,7 @@ def calculate_hex_p2p_rssi(
 ) -> float:
     import h3
 
-    try:
-        lat, lon = h3.cell_to_latlng(rx_cell)
-    except AttributeError:
-        lat, lon = h3.h3_to_geo(rx_cell)
+    lat, lon = h3.cell_to_latlng(rx_cell)
 
     if abs(tx_lon - lon) < 1e-6 and abs(tx_lat - lat) < 1e-6:
         return -30.0
@@ -392,17 +377,9 @@ def calculate_hex_p2p_rssi(
     distance_km = distance_m / 1000.0
 
     try:
-        res = h3.get_resolution(rx_cell) if hasattr(h3, 'get_resolution') else h3.h3_get_resolution(rx_cell)
-        
-        try:
-            tx_cell = h3.latlng_to_cell(tx_lat, tx_lon, res)
-        except AttributeError:
-            tx_cell = h3.geo_to_h3(tx_lat, tx_lon, res)
-
-        try:
-            path_cells = h3.grid_path_cells(tx_cell, rx_cell)
-        except AttributeError:
-            path_cells = h3.h3_line(tx_cell, rx_cell)
+        res = h3.get_resolution(rx_cell)
+        tx_cell = h3.latlng_to_cell(tx_lat, tx_lon, res)
+        path_cells = h3.grid_path_cells(tx_cell, rx_cell)
 
         surface_profile = [hex_dem.get(c, 0.0) for c in path_cells]
 
@@ -479,10 +456,7 @@ def estimate_hex_grid_signal(
     print("Converting square DEM to hex DEM...")
     hex_dem = convert_dem_to_hex(dem_array, inv_transform, hex_cells)
 
-    try:
-        tx_cell = h3.latlng_to_cell(tx_lat, tx_lon, resolution)
-    except AttributeError:
-        tx_cell = h3.geo_to_h3(tx_lat, tx_lon, resolution)
+    tx_cell = h3.latlng_to_cell(tx_lat, tx_lon, resolution)
 
     if tx_cell not in hex_dem:
         cols, rows = inv_transform * (tx_lon, tx_lat)
