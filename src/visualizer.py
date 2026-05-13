@@ -1,11 +1,21 @@
-import io
+from typing import Dict, Tuple
+
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend — safe for Colab and headless envs
 import matplotlib.pyplot as plt
 import rasterio
 
-def plot_signal_distribution(dem_path: str, tx_coords: tuple, lon_grid: np.ndarray, lat_grid: np.ndarray, rssi_matrix: np.ndarray, target_area: dict):
+
+def plot_signal_distribution(
+    dem_path: str,
+    tx_coords: Tuple[float, float],
+    lon_grid: np.ndarray,
+    lat_grid: np.ndarray,
+    rssi_matrix: np.ndarray,
+    target_area: Dict[str, float],
+    save_path: str,
+) -> None:
     """
     Overlays the calculated RSSI heatmap onto the downloaded topographic DEM context.
     """
@@ -61,21 +71,20 @@ def plot_signal_distribution(dem_path: str, tx_coords: tuple, lon_grid: np.ndarr
     plt.legend(loc='upper right')
     plt.tight_layout()
 
-    # Display inline (Colab/Jupyter) or save to file (headless)
     try:
-        from IPython.display import display, Image as IPImage
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
-        buf.seek(0)
-        display(IPImage(buf.read()))
-    except ImportError:
-        plt.savefig('signal_coverage.png', dpi=150, bbox_inches='tight')
-        print("Plot saved to signal_coverage.png")
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"Plot saved to {save_path}")
     finally:
         plt.close()
 
 
-def plot_hex_signal_map(dem_path: str, tx_coords: tuple, hex_rssi: dict, target_area: dict):
+def plot_hex_signal_map(
+    dem_path: str,
+    tx_coords: Tuple[float, float],
+    hex_rssi: Dict[str, float],
+    target_area: Dict[str, float],
+    save_path: str,
+) -> None:
     """
     Overlays the calculated Hex RSSI heatmap onto the downloaded topographic DEM context.
     """
@@ -141,13 +150,7 @@ def plot_hex_signal_map(dem_path: str, tx_coords: tuple, hex_rssi: dict, target_
     plt.tight_layout()
 
     try:
-        from IPython.display import display, Image as IPImage
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
-        buf.seek(0)
-        display(IPImage(buf.read()))
-    except ImportError:
-        plt.savefig('hex_signal_coverage.png', dpi=150, bbox_inches='tight')
-        print("Plot saved to hex_signal_coverage.png")
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"Plot saved to {save_path}")
     finally:
         plt.close()
