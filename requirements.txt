@@ -5,11 +5,14 @@ matplotlib
 
 # Geospatial & Core computation
 numpy
+pandas
 shapely
 fiona
 rasterio
 pyproj
 rasterstats
+folium
+branca
 
 # Utilities & Testing
 tqdm
