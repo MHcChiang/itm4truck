@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
 
+from DHS.anomaly import count_anomaly_per_cell
 from DHS.pop import generate_base_layer
 from DHS.viz_pop import visualize_pop_distribution, visualize_town_zones
 from DHS.zone import classify_zones, generate_town_grid
@@ -54,6 +55,14 @@ def parse_args() -> argparse.Namespace:
     files.add_argument("--zones-file",     default="h3_zones.html", help="Zone map filename (default: h3_zones.html)")
     files.add_argument("--pop-dist-file",  default="pop_dist.html", help="Population distribution map filename (default: pop_dist.html)")
     files.add_argument("--data-dir",       default="processed_data",          help="Output directory for CSV grid data (default: processed_data)")
+    files.add_argument(
+        "--anomaly-file", default="processed_data/h3_demand_point_level.parquet",
+        help="Parquet file with anomaly points (lat, lon columns required)",
+    )
+    files.add_argument(
+        "--scatter-file", default="data/df_flags.parquet",
+        help="Parquet file with raw measurement points to scatter plot (lat, lon columns required)",
+    )
 
     return parser.parse_args()
 
@@ -98,19 +107,43 @@ def main() -> None:
     # Step 3: Fine-grained town grid within classified town areas.
     df_town_grid = generate_town_grid(df_urban, str(pop_path), refined_res=args.refined_res)
 
-    # Step 4a: Zone map — town clusters (low res) + town grid (high res).
+    # Step 4: Count anomaly points per base-layer cell.
+    anomaly_path = project_root / args.anomaly_file
+    df_anomaly = None
+    if anomaly_path.exists():
+        df_anomaly = count_anomaly_per_cell(
+            str(anomaly_path), df_base["h3_index"].tolist(), args.base_res
+        )
+    else:
+        print(f"Anomaly file not found, skipping: {anomaly_path}")
+
+    # Step 5: Load scatter data (raw measurement points).
+    scatter_path = project_root / args.scatter_file
+    df_scatter = None
+    if scatter_path.exists():
+        import pandas as pd
+        df_scatter = pd.read_parquet(str(scatter_path), columns=["lat", "lon"])
+        print(f"Scatter points loaded: {len(df_scatter)}")
+    else:
+        print(f"Scatter file not found, skipping: {scatter_path}")
+
+    # Step 5a: Zone map — town clusters + town grid + anomaly layer + scatter.
     visualize_town_zones(
         df_urban, df_town_grid, df_clusters,
         output_file=str(fig_dir / args.zones_file),
+        df_anomaly=df_anomaly,
+        df_scatter=df_scatter,
     )
 
-    # Step 4b: Population distribution — all base-layer cells colored by population.
+    # Step 5b: Population distribution — all base-layer cells colored by population.
     visualize_pop_distribution(df_base, output_file=str(fig_dir / args.pop_dist_file))
 
-    # Step 5: Save grid data as CSV for GA input.
+    # Step 6: Save grid data as CSV for GA input.
     df_base.to_csv(data_dir / "base_layer.csv", index=False)
     df_urban.to_csv(data_dir / "urban_cells.csv", index=False)
     df_town_grid.to_csv(data_dir / "town_grid.csv", index=False)
+    if df_anomaly is not None:
+        df_anomaly.to_csv(data_dir / "anomaly_counts.csv", index=False)
     print(f"\nGrid data saved to {data_dir}/")
 
 

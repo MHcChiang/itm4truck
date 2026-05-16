@@ -47,6 +47,6 @@ python main.py --h3
 
 The result should be like:
 
-![Signal Estimation Test Result](test_result.png)
+![Signal Estimation Test Result](fig/hex_signal_coverage.png)
 
 

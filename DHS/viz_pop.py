@@ -209,6 +209,8 @@ def visualize_town_zones(
     output_file: str = "h3_zones.html",
     zoom_start: int = 7,
     tiles: str = "CartoDB positron",
+    df_anomaly: Optional[pd.DataFrame] = None,
+    df_scatter: Optional[pd.DataFrame] = None,
 ) -> folium.Map:
     """Create a standalone zone map with town-area and town-grid layers.
 
@@ -227,6 +229,12 @@ def visualize_town_zones(
         output_file: Path to write the HTML map.
         zoom_start: Initial map zoom level.
         tiles: Folium tile layer name.
+        df_anomaly: Optional dataframe with ``h3_index`` and ``anomaly_count``
+            columns (output of ``count_anomaly_per_cell``). When provided, adds
+            a third layer showing anomaly density. Cells with zero count are
+            not drawn.
+        df_scatter: Optional dataframe with ``lat`` and ``lon`` columns. When
+            provided, plots all rows as a scatter layer of small circle markers.
 
     Returns:
         The saved Folium map object.
@@ -263,6 +271,43 @@ def visualize_town_zones(
             ).add_to(fg_grid)
         map_obj.add_child(cmap_grid)
     fg_grid.add_to(map_obj)
+
+    if df_anomaly is not None:
+        active = df_anomaly[df_anomaly["anomaly_count"] > 0]
+        if not active.empty:
+            cmap_anomaly = _get_population_colormap(
+                active.rename(columns={"anomaly_count": "pop"}),
+                caption="Anomaly Count",
+                min_population=0,
+                default_max=float(active["anomaly_count"].quantile(0.95)) or 1.0,
+            )
+            fg_anomaly = FeatureGroup(name="Signal Anomaly Density", show=True)
+            for cell in active[["h3_index", "anomaly_count"]].to_dict("records"):
+                folium.Polygon(
+                    locations=_hex_boundary_points(cell["h3_index"]),
+                    fill=True,
+                    fill_color=cmap_anomaly(cell["anomaly_count"]),
+                    color="#ff4400",
+                    weight=0.6,
+                    fill_opacity=0.65,
+                    tooltip=f"Anomaly count: {cell['anomaly_count']}",
+                ).add_to(fg_anomaly)
+            fg_anomaly.add_to(map_obj)
+            map_obj.add_child(cmap_anomaly)
+
+    if df_scatter is not None and not df_scatter.empty:
+        fg_scatter = FeatureGroup(name="Measurement Points", show=False)
+        for row in df_scatter[["lat", "lon"]].to_dict("records"):
+            folium.CircleMarker(
+                location=[row["lat"], row["lon"]],
+                radius=2,
+                color="#2266cc",
+                fill=True,
+                fill_color="#2266cc",
+                fill_opacity=0.5,
+                weight=0,
+            ).add_to(fg_scatter)
+        fg_scatter.add_to(map_obj)
 
     LayerControl(collapsed=False).add_to(map_obj)
     map_obj.save(output_file)
