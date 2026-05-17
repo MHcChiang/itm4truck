@@ -3,10 +3,12 @@ from pathlib import Path
 
 import pandas as pd
 
+from candidates.candidates import build_rural_candidates
 from DHS.anomaly import count_anomaly_per_cell
 from DHS.pop import generate_base_layer
 from viz.viz_pop import (
     add_anomaly_layer,
+    add_candidates_layer,
     add_scatter_layer,
     add_town_areas_layer,
     add_town_grid_layer,
@@ -26,7 +28,7 @@ def parse_args() -> argparse.Namespace:
     # Bounding box
     bbox = parser.add_argument_group("Bounding Box")
     bbox.add_argument("--north", type=float, default=38.457485, help="North latitude bound")
-    bbox.add_argument("--south", type=float, default=33.464998, help="South latitude bound")
+    bbox.add_argument("--south", type=float, default=35.353862, help="South latitude bound") #33.464998
     bbox.add_argument("--east",  type=float, default=-77.000644, help="East longitude bound")
     bbox.add_argument("--west",  type=float, default=-87.998634, help="West longitude bound")
 
@@ -72,6 +74,10 @@ def parse_args() -> argparse.Namespace:
     files.add_argument(
         "--scatter-file", default="data/df_flags.parquet",
         help="Parquet file with raw measurement points to scatter plot (lat, lon columns required)",
+    )
+    files.add_argument(
+        "--hifld-csv", default="data/Cellular_Towers_in_US.csv",
+        help="HIFLD cellular tower CSV (default: data/Cellular_Towers_in_US.csv)",
     )
 
     return parser.parse_args()
@@ -136,6 +142,20 @@ def main() -> None:
     else:
         print(f"Scatter file not found, skipping: {scatter_path}")
 
+    # Step 5c: Build rural candidates (HIFLD + demand hotspots).
+    df_candidates = None
+    hifld_path = project_root / args.hifld_csv
+    if hifld_path.exists():
+        df_candidates = build_rural_candidates(
+            hifld_csv=str(hifld_path),
+            df_rural=df_rural,
+            df_anomaly=df_anomaly,
+            bbox=bbox,
+            output_path=str(data_dir / "rural_candidates.csv"),
+        )
+    else:
+        print(f"HIFLD CSV not found, skipping candidates: {hifld_path}")
+
     # Step 5a: Zone map — compose layers, then finalize.
     zone_map = create_zone_map(df_urban)
     add_town_areas_layer(zone_map, df_urban, df_clusters)
@@ -144,14 +164,23 @@ def main() -> None:
         add_anomaly_layer(zone_map, df_anomaly)
     if df_scatter is not None:
         add_scatter_layer(zone_map, df_scatter)
+    if df_candidates is not None:
+        add_candidates_layer(zone_map, df_candidates)
     finalize_map(zone_map, str(fig_dir / args.zones_file))
 
     # Step 5b: Population distribution — all base-layer cells colored by population.
     visualize_pop_distribution(df_base, output_file=str(fig_dir / args.pop_dist_file))
 
     # Step 6: Save grid data as CSV for GA input.
-    df_base.to_csv(data_dir / "base_layer.csv", index=False)
+    df_urban["grid_type"] = "urban"
+    df_rural["grid_type"] = "rural"
+    df_base_tagged = df_base.merge(
+        pd.concat([df_urban[["h3_index", "grid_type"]], df_rural[["h3_index", "grid_type"]]]),
+        on="h3_index", how="left",
+    )
+    df_base_tagged.to_csv(data_dir / "base_layer.csv", index=False)
     df_urban.to_csv(data_dir / "urban_cells.csv", index=False)
+    df_rural.to_csv(data_dir / "rural_cells.csv", index=False)
     df_town_grid.to_csv(data_dir / "town_grid.csv", index=False)
     if df_anomaly is not None:
         df_anomaly.to_csv(data_dir / "anomaly_counts.csv", index=False)

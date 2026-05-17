@@ -208,6 +208,51 @@ def add_anomaly_layer(
     return map_obj
 
 
+def add_candidates_layer(
+    map_obj: folium.Map,
+    df_candidates: pd.DataFrame,
+    show: bool = True,
+) -> folium.Map:
+    """Add candidate tower sites as a scatter layer with source-based colouring.
+
+    HIFLD existing towers are shown in blue; demand-driven proposals in orange.
+    Each marker tooltip shows source, elevation, and demand score.
+
+    Args:
+        map_obj: Target Folium map.
+        df_candidates: DataFrame with ``h3_index``, ``lat``, ``lon``,
+            ``source``, ``elevation``, ``demand`` columns (output of
+            ``build_rural_candidates``).
+        show: Whether to show this layer by default.
+
+    Returns:
+        The same map_obj for chaining.
+    """
+    if df_candidates.empty:
+        return map_obj
+
+    _SOURCE_COLOR = {"hifld": "#1a6faf", "demand": "#e07b00"}
+
+    fg = FeatureGroup(name="Candidate Towers", show=show)
+    for row in df_candidates[["lat", "lon", "source", "elevation", "demand"]].to_dict("records"):
+        source = row["source"]
+        color = _SOURCE_COLOR.get(source, "#888888")
+        elev = f"{row['elevation']:.0f} m" if not pd.isna(row["elevation"]) else "—"
+        demand = f"{row['demand']:.3f}" if not pd.isna(row["demand"]) else "—"
+        folium.CircleMarker(
+            location=[row["lat"], row["lon"]],
+            radius=5,
+            color=color,
+            fill=True,
+            fill_color=color,
+            fill_opacity=0.85,
+            weight=1.5,
+            tooltip=f"<b>{source.upper()}</b><br>Elev: {elev}<br>Demand: {demand}",
+        ).add_to(fg)
+    fg.add_to(map_obj)
+    return map_obj
+
+
 def add_scatter_layer(
     map_obj: folium.Map,
     df_scatter: pd.DataFrame,
