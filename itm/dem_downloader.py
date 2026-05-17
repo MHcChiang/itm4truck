@@ -3,7 +3,7 @@ import py3dep
 import rioxarray
 from shapely.geometry import box
 
-def download_and_crop(west: float, south: float, east: float, north: float, output_dir: str = "dem_data", filename: str = "target_area_dem.tif") -> str:
+def download_and_crop(west: float, south: float, east: float, north: float, output_dir: str = "data/dem_data", filename: str = "target_area_dem.tif") -> str:
     """
     Downloads DEM data from USGS using the py3dep library and saves it as a GeoTIFF.
     """

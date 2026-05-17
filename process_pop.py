@@ -1,9 +1,19 @@
 import argparse
 from pathlib import Path
 
+import pandas as pd
+
 from DHS.anomaly import count_anomaly_per_cell
 from DHS.pop import generate_base_layer
-from DHS.viz_pop import visualize_pop_distribution, visualize_town_zones
+from viz.viz_pop import (
+    add_anomaly_layer,
+    add_scatter_layer,
+    add_town_areas_layer,
+    add_town_grid_layer,
+    create_zone_map,
+    finalize_map,
+    visualize_pop_distribution,
+)
 from DHS.zone import classify_zones, generate_town_grid
 
 
@@ -49,14 +59,14 @@ def parse_args() -> argparse.Namespace:
     files = parser.add_argument_group("Files")
     files.add_argument(
         "--pop-file", default="usa_pop_2026_CN_100m_R2025A_v1.tif",
-        help="Population GeoTIFF filename inside ./pop_data/ (default: usa_pop_2026_CN_100m_R2025A_v1.tif)",
+        help="Population GeoTIFF filename inside ./data/ (default: usa_pop_2026_CN_100m_R2025A_v1.tif)",
     )
-    files.add_argument("--fig-dir",        default="fig",          help="Output directory for HTML maps (default: fig)")
-    files.add_argument("--zones-file",     default="h3_zones.html", help="Zone map filename (default: h3_zones.html)")
-    files.add_argument("--pop-dist-file",  default="pop_dist.html", help="Population distribution map filename (default: pop_dist.html)")
-    files.add_argument("--data-dir",       default="processed_data",          help="Output directory for CSV grid data (default: processed_data)")
+    files.add_argument("--fig-dir",       default="fig",           help="Output directory for HTML maps (default: fig)")
+    files.add_argument("--zones-file",    default="h3_zones.html", help="Zone map filename (default: h3_zones.html)")
+    files.add_argument("--pop-dist-file", default="pop_dist.html", help="Population distribution map filename (default: pop_dist.html)")
+    files.add_argument("--out-dir",       default="processed_data", help="Output directory for CSV grid data (default: processed_data)")
     files.add_argument(
-        "--anomaly-file", default="processed_data/h3_demand_point_level.parquet",
+        "--anomaly-file", default="data/h3_demand_point_level.parquet",
         help="Parquet file with anomaly points (lat, lon columns required)",
     )
     files.add_argument(
@@ -80,9 +90,9 @@ def main() -> None:
     args = parse_args()
 
     project_root = get_project_root()
-    pop_path = project_root / "pop_data" / args.pop_file
+    pop_path = project_root / "data" / args.pop_file
     fig_dir = project_root / args.fig_dir
-    data_dir = project_root / args.data_dir
+    data_dir = project_root / args.out_dir
     fig_dir.mkdir(exist_ok=True)
     data_dir.mkdir(exist_ok=True)
 
@@ -121,19 +131,20 @@ def main() -> None:
     scatter_path = project_root / args.scatter_file
     df_scatter = None
     if scatter_path.exists():
-        import pandas as pd
         df_scatter = pd.read_parquet(str(scatter_path), columns=["lat", "lon"])
         print(f"Scatter points loaded: {len(df_scatter)}")
     else:
         print(f"Scatter file not found, skipping: {scatter_path}")
 
-    # Step 5a: Zone map — town clusters + town grid + anomaly layer + scatter.
-    visualize_town_zones(
-        df_urban, df_town_grid, df_clusters,
-        output_file=str(fig_dir / args.zones_file),
-        df_anomaly=df_anomaly,
-        df_scatter=df_scatter,
-    )
+    # Step 5a: Zone map — compose layers, then finalize.
+    zone_map = create_zone_map(df_urban)
+    add_town_areas_layer(zone_map, df_urban, df_clusters)
+    add_town_grid_layer(zone_map, df_town_grid)
+    if df_anomaly is not None:
+        add_anomaly_layer(zone_map, df_anomaly)
+    if df_scatter is not None:
+        add_scatter_layer(zone_map, df_scatter)
+    finalize_map(zone_map, str(fig_dir / args.zones_file))
 
     # Step 5b: Population distribution — all base-layer cells colored by population.
     visualize_pop_distribution(df_base, output_file=str(fig_dir / args.pop_dist_file))

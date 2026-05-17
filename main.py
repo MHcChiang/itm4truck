@@ -43,7 +43,7 @@ def main() -> None:
     }
 
     # Step 1: Download DEM
-    dem_path = download_and_crop(**target_area, output_dir="dem_data", filename="target_area_dem.tif")
+    dem_path = download_and_crop(**target_area, output_dir="data/dem_data", filename="target_area_dem.tif")
     if not dem_path:
         return
 

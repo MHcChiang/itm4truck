@@ -171,8 +171,10 @@ Code/
 │   ├── pop.py               ← Step 1: raster sampling → H3 DataFrame
 │   ├── zone.py              ← Step 2 & 3: zone classification + fine grid
 │   └── viz_pop.py           ← Step 4: Folium map generation
-├── pop_data/
-│   └── *.tif                ← WorldPop raster (input)
+├── data/
+│   ├── dem_data/            ← DEM raster downloads
+│   ├── *.tif                ← WorldPop raster (input)
+│   └── *.parquet            ← Raw truck/anomaly measurement data
 ├── data/
 │   ├── base_layer.csv       ← Output: low-res full grid
 │   ├── urban_cells.csv      ← Output: town zone cells
