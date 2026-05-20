@@ -11,9 +11,9 @@ for p in [repo_path, src_path, scripts_path]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from src.dem_downloader import download_and_crop
-from src.signal_estimator import estimate_grid_signal, estimate_hex_grid_signal
-from src.visualizer import plot_signal_distribution, plot_hex_signal_map
+from itm.dem_downloader import download_and_crop
+from itm.signal_estimator import estimate_grid_signal, estimate_hex_grid_signal
+from itm.visualizer import plot_signal_distribution, plot_hex_signal_map
 
 
 def main() -> None:

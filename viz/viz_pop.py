@@ -4,6 +4,7 @@ import branca.colormap as cm
 import folium
 from folium import FeatureGroup, LayerControl
 import h3
+import numpy as np
 import pandas as pd
 
 _CLUSTER_COLORS = [
@@ -125,7 +126,7 @@ def add_town_areas_layer(
     rank_map = _build_rank_map(df_clusters)
     fg = FeatureGroup(name="Town Areas", show=show)
     for cell in df_urban[["h3_index", "pop", "cluster_id"]].to_dict("records"):
-        rank = rank_map[int(cell["cluster_id"])]
+        rank = rank_map.get(int(cell["cluster_id"]), 0)
         color = _CLUSTER_COLORS[rank % len(_CLUSTER_COLORS)]
         folium.Polygon(
             locations=_hex_boundary_points(cell["h3_index"]),
@@ -283,6 +284,77 @@ def add_scatter_layer(
             weight=0,
         ).add_to(fg)
     fg.add_to(map_obj)
+    return map_obj
+
+
+def add_coverage_layer(
+    map_obj: folium.Map,
+    coverage: np.ndarray,
+    candidate_h3: List[str],
+    demand_h3: List[str],
+    df_candidates: pd.DataFrame,
+    source_filter: str = "hifld",
+    show: bool = True,
+) -> folium.Map:
+    """Add a coverage layer showing which demand cells are covered by selected towers.
+
+    Computes a logical OR across all candidate rows matching ``source_filter``
+    to determine which demand cells are covered by at least one such tower.
+    Two sub-layers are added: covered cells (green, on by default) and
+    uncovered cells (faint red, off by default for performance).
+
+    Args:
+        map_obj: Target Folium map.
+        coverage: Binary uint8 array (n_candidates × n_demand) from npz.
+        candidate_h3: H3 index strings for coverage matrix rows (``npz["candidates"]``).
+        demand_h3: H3 index strings for coverage matrix columns (``npz["demand"]``).
+        df_candidates: DataFrame with ``h3_index`` and ``source`` columns.
+        source_filter: Candidate source to evaluate — ``"hifld"``, ``"demand"``, or ``"all"``.
+        show: Whether to show the covered layer by default.
+
+    Returns:
+        The same map_obj for chaining.
+    """
+    h3_to_row = {h: i for i, h in enumerate(candidate_h3)}
+
+    if source_filter == "all":
+        filtered_h3 = df_candidates["h3_index"].tolist()
+    else:
+        filtered_h3 = df_candidates[df_candidates["source"] == source_filter]["h3_index"].tolist()
+
+    row_indices = [h3_to_row[h] for h in filtered_h3 if h in h3_to_row]
+    if not row_indices:
+        print(f"No candidates found for source='{source_filter}', skipping coverage layer.")
+        return map_obj
+
+    covered_mask = coverage[row_indices].any(axis=0)  # (n_demand,) boolean
+    n_covered = int(covered_mask.sum())
+    n_total = len(demand_h3)
+    label = source_filter.upper() if source_filter != "all" else "All"
+    print(f"{label} coverage: {n_covered}/{n_total} demand cells ({n_covered / n_total:.1%})")
+
+    fg_covered   = FeatureGroup(name=f"{label} Tower Coverage — Covered",   show=show)
+    fg_uncovered = FeatureGroup(name=f"{label} Tower Coverage — Uncovered",  show=False)
+
+    for j, h3_idx in enumerate(demand_h3):
+        pts = _hex_boundary_points(h3_idx)
+        if covered_mask[j]:
+            folium.Polygon(
+                locations=pts,
+                fill=True, fill_color="#22aa44", color="#22aa44",
+                weight=0.5, fill_opacity=0.55,
+                tooltip=f"Covered by {label} tower",
+            ).add_to(fg_covered)
+        else:
+            folium.Polygon(
+                locations=pts,
+                fill=True, fill_color="#cc2222", color="#cc2222",
+                weight=0.3, fill_opacity=0.15,
+                tooltip="Not covered",
+            ).add_to(fg_uncovered)
+
+    fg_covered.add_to(map_obj)
+    fg_uncovered.add_to(map_obj)
     return map_obj
 
 

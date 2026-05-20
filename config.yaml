@@ -1,0 +1,32 @@
+# Project-wide configuration for the IEEE truck cellular coverage project.
+# All scripts load defaults from here; CLI arguments override individual values.
+
+region:
+  north: 38.457485
+  south: 33.464998
+  east: -77.000644
+  west: -87.998634
+
+h3:
+  base_res: 6        # rural demand grid (~3.2 km edge)
+  refined_res: 8     # town fine grid (~0.5 km edge)
+
+dem:
+  path: data/dem_data/target_area_dem.tif
+  resolution: 90     # metres — 90 m fits full bbox in RAM (~335 MB)
+
+rf:
+  freq_mhz: 700.0
+  tx_height_m: 30.0        # antenna height above ground at transmitter (m)
+  rx_height_m: 2.0         # antenna height above ground at receiver (m)
+  tx_power_dbm: 43.0
+  rssi_threshold_dbm: -90.0
+  max_coverage_km: 30.0    # distance pruning cutoff — pairs beyond this skip ITM
+
+paths:
+  pop_file: data/usa_pop_2026_CN_100m_R2025A_v1.tif
+  hifld_csv: data/Cellular_Towers_in_US.csv
+  anomaly_file: data/h3_demand_point_level.parquet
+  scatter_file: data/df_flags.parquet
+  out_dir: processed_data
+  fig_dir: fig
